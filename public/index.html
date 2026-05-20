@@ -1,0 +1,461 @@
+<!-- index.html -->
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <title>Sistema de Gestão - Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header><strong>Sistema de Gestão</strong></header>
+  <div class="container">
+    <div id="loginCard" class="card">
+      <h3>Login</h3>
+      <input id="loginInput" placeholder="login id / telefone / nome">
+      <input id="passwordInput" type="password" placeholder="senha">
+      <button onclick="login()">Entrar</button>
+      <div id="loginMsg" class="small"></div>
+    </div>
+
+    <div id="app" style="display:none;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <h3>Dashboard</h3>
+            <div id="userInfo" class="small"></div>
+          </div>
+          <div>
+            <button onclick="logout()">Sair</button>
+          </div>
+        </div>
+        <canvas id="dashboardChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h4>Membros</h4>
+        <div class="row">
+          <div class="col">
+            <input id="memberName" placeholder="Nome do membro">
+            <select id="memberRole"></select>
+            <button onclick="createMember()">Adicionar Membro</button>
+          </div>
+          <div class="col">
+            <div class="table-responsive"><table id="membersTable">
+              <thead><tr><th>Nome</th><th>Cargo</th><th>Total</th><th>Ações</th></tr></thead>
+              <tbody></tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Registar Contribuição</h4>
+        <select id="contribMember"></select>
+        <input id="contribAmount" placeholder="Valor">
+        <input id="contribNote" placeholder="Nota (opcional)">
+        <button onclick="addContribution()">Registar</button>
+        <div id="contribMsg" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h4>Histórico de Contribuições</h4>
+        <div class="table-responsive">
+            <table id="contributionsTable">
+          <thead><tr><th>Data</th><th>Membro</th><th>Registrado por</th><th>Valor</th><th>Nota</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card" id="rolesCard" style="display:none;">
+        <h4>Gerir Cargos (Chefe)</h4>
+        <input id="roleName" placeholder="Nome do cargo">
+        <input id="roleWeekly" placeholder="Meta semanal (valor)">
+        <input id="roleMonthly" placeholder="Meta mensal (valor)">
+        <button onclick="createRole()">Criar Cargo</button>
+        <div class="table-responsive">
+            <table id="rolesTable" style="margin-top: 10px;">
+          <thead><tr><th>Nome</th><th>Semanal</th><th>Mensal</th><th>Ações</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card" id="usersCard" style="display:none;">
+        <h4>Gerir Usuários (Admin)</h4>
+        <div class="row">
+          <div class="col">
+            <input id="userName" placeholder="Nome do usuário">
+            <input id="userPhone" placeholder="Telefone">
+            <input id="userLogin" placeholder="Login ID">
+            <input id="userPassword" placeholder="Senha" type="password">
+            <select id="userRole">
+              <option value="user">Usuário Comum</option>
+              <option value="subchefe">Subchefe</option>
+              <option value="chefe">Chefe</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <button onclick="createUser()">Adicionar Usuário</button>
+          </div>
+          <div class="col">
+            <div class="table-responsive">
+            <table id="usersTable">
+              <thead><tr><th>Nome</th><th>Login/Telef.</th><th>Cargo</th><th>Ações</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal">
+      <h3 id="modalTitle" style="margin-top:0;"></h3>
+      <div id="modalBody"></div>
+      <div class="modal-footer">
+        <button onclick="closeModal()" class="btn-secondary">Cancelar</button>
+        <button id="modalConfirmBtn" class="btn-primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+<script>
+const API = '/api';
+window.currentUserRole = null;
+
+function formatMoney(value) {
+  return new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+}
+
+let modalConfirmCallback = null;
+
+function openModal(title, htmlBody, onConfirm) {
+  document.getElementById('modalTitle').innerText = title;
+  document.getElementById('modalBody').innerHTML = htmlBody;
+  modalConfirmCallback = onConfirm;
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').style.display = 'none';
+  modalConfirmCallback = null;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('modalConfirmBtn').addEventListener('click', () => {
+    if (modalConfirmCallback) modalConfirmCallback();
+  });
+});
+
+
+async function login(){
+  const login = document.getElementById('loginInput').value;
+  const password = document.getElementById('passwordInput').value;
+  const res = await fetch(API + '/login', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({login,password}), credentials:'include'
+  });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('loginCard').style.display='none';
+    document.getElementById('app').style.display='block';
+    window.currentUserRole = data.role;
+    document.getElementById('userInfo').innerText = `Olá, ${data.name} — cargo: ${data.role}`;
+    if (data.role === 'admin') {
+      document.getElementById('usersCard').style.display = 'block';
+    } else {
+      document.getElementById('usersCard').style.display = 'none';
+    }
+    if (data.role === 'chefe' || data.role === 'admin') {
+      const rolesCard = document.getElementById('rolesCard');
+      if(rolesCard) rolesCard.style.display = 'block';
+    } else {
+      const rolesCard = document.getElementById('rolesCard');
+      if(rolesCard) rolesCard.style.display = 'none';
+    }
+    loadAll();
+  } else {
+    document.getElementById('loginMsg').innerText = data.error || 'Erro';
+  }
+}
+
+async function logout(){
+  await fetch(API + '/logout', { method:'POST', credentials:'include' });
+  location.reload();
+}
+
+async function loadAll(){
+  await loadRoles();
+  await loadMembers();
+  await loadTargets();
+  await loadContributions();
+  if (document.getElementById('usersCard').style.display === 'block') {
+    await loadUsers();
+  }
+}
+
+async function loadRoles(){
+  const res = await fetch(API + '/roles', { credentials:'include' });
+  const roles = await res.json();
+  const sel = document.getElementById('memberRole');
+  sel.innerHTML = '<option value="">Sem cargo</option>';
+  const tbody = document.querySelector('#rolesTable tbody');
+  if(tbody) tbody.innerHTML = '';
+  roles.forEach(r => {
+    if (r.name.toLowerCase() === 'chefe' && window.currentUserRole !== 'admin') {
+      // Apenas admin pode adicionar chefe
+    } else {
+      const opt = document.createElement('option'); opt.value = r.id; opt.text = r.name; sel.appendChild(opt);
+    }
+    if(tbody) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.name}</td><td>${formatMoney(r.weekly_target)}</td><td>${formatMoney(r.monthly_target)}</td>
+        <td>
+          <button onclick="editRole(${r.id}, '${r.name}', ${formatMoney(r.weekly_target)}, ${formatMoney(r.monthly_target)})">Editar</button>
+          <button onclick="deleteRole(${r.id})">Apagar</button>
+        </td>`;
+      tbody.appendChild(tr);
+    }
+  });
+}
+
+async function loadMembers(){
+  const res = await fetch(API + '/members', { credentials:'include' });
+  const members = await res.json();
+  const contribSel = document.getElementById('contribMember');
+  if(contribSel) contribSel.innerHTML = '<option value="">Selecione um membro</option>';
+  const tbody = document.querySelector('#membersTable tbody');
+  tbody.innerHTML = '';
+  members.forEach(m => {
+    if(contribSel) {
+      const opt = document.createElement('option'); opt.value = m.id; opt.text = m.name; contribSel.appendChild(opt);
+    }
+    const tr = document.createElement('tr');
+    let actionsHtml = '';
+    if (window.currentUserRole === 'chefe' || window.currentUserRole === 'admin') {
+      actionsHtml = `
+        <button onclick="editMember(${m.id},'${m.name}')">Editar</button>
+        <button onclick="deleteMember(${m.id})">Apagar</button>
+      `;
+    }
+    tr.innerHTML = `<td>${m.name}</td><td>${m.role_name||''}</td><td>${formatMoney(m.total_contribution)}</td>
+      <td>${actionsHtml}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function createMember(){
+  const name = document.getElementById('memberName').value;
+  const role_id = document.getElementById('memberRole').value || null;
+  await fetch(API + '/members', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name,role_id}) });
+  document.getElementById('memberName').value='';
+  loadMembers();
+  loadRoles();
+}
+
+function editMember(id, oldName){
+  const roleSelectHtml = document.getElementById('memberRole').innerHTML;
+  openModal('Editar Membro', `
+    <label class="small">Nome do Membro</label>
+    <input id="editMemberName" value="${oldName}" placeholder="Nome">
+    <label class="small">Cargo</label>
+    <select id="editMemberRole">${roleSelectHtml}</select>
+  `, async () => {
+    const name = document.getElementById('editMemberName').value;
+    const role_id = document.getElementById('editMemberRole').value || null;
+    if(!name) return;
+    await fetch(API + '/members/' + id, { method:'PUT', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, role_id }) });
+    loadMembers();
+    closeModal();
+  });
+}
+
+function deleteMember(id){
+  openModal('Apagar Membro', 'Deseja apagar este membro?', async () => {
+    await fetch(API + '/members/' + id, { method:'DELETE', credentials:'include' });
+    loadMembers();
+    closeModal();
+  });
+}
+
+async function addContribution(){
+  const member_id = document.getElementById('contribMember').value;
+  const amount = parseFloat(document.getElementById('contribAmount').value);
+  const note = document.getElementById('contribNote').value;
+  if (!member_id || !amount) { document.getElementById('contribMsg').innerText='Preencha membro e valor'; return; }
+  await fetch(API + '/contributions', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ member_id, amount, note }) });
+  document.getElementById('contribAmount').value=''; document.getElementById('contribNote').value='';
+  document.getElementById('contribMsg').innerText='Contribuição registada';
+  loadMembers(); loadTargets(); loadContributions();
+}
+
+async function loadContributions() {
+  const res = await fetch(API + '/contributions', { credentials:'include' });
+  if (!res.ok) return;
+  const contributions = await res.json();
+  const tbody = document.querySelector('#contributionsTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  contributions.forEach(c => {
+    const tr = document.createElement('tr');
+    const date = new Date(c.created_at).toLocaleString('pt-PT');
+    tr.innerHTML = `<td>${date}</td><td>${c.member_name}</td><td>${c.user_name}</td><td>${formatMoney(c.amount)}</td><td>${c.note||''}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function createRole(){
+  const name = document.getElementById('roleName').value;
+  const weekly = parseFloat(document.getElementById('roleWeekly').value) || 0;
+  const monthly = parseFloat(document.getElementById('roleMonthly').value) || 0;
+  await fetch(API + '/roles', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, weekly_target: weekly, monthly_target: monthly }) });
+  document.getElementById('roleName').value=''; document.getElementById('roleWeekly').value=''; document.getElementById('roleMonthly').value='';
+  loadRoles();
+}
+
+let dashboardChartInstance = null;
+async function loadTargets(){
+  const res = await fetch(API + '/dashboard/targets', { credentials:'include' });
+  const data = await res.json();
+  
+  const labels = data.map(d => d.name);
+  const totals = data.map(d => d.total || 0);
+  const weeklies = data.map(d => d.weekly_target || 0);
+  const monthlies = data.map(d => d.monthly_target || 0);
+
+  const ctx = document.getElementById('dashboardChart').getContext('2d');
+  if (dashboardChartInstance) {
+    dashboardChartInstance.destroy();
+  }
+
+  dashboardChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Total Arrecadado',
+          data: totals,
+          backgroundColor: '#0b5',
+        },
+        {
+          label: 'Meta Semanal',
+          data: weeklies,
+          backgroundColor: '#ffb703',
+        },
+        {
+          label: 'Meta Mensal',
+          data: monthlies,
+          backgroundColor: '#fb8500',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function editRole(id, oldName, oldWeekly, oldMonthly) {
+  openModal('Editar Cargo', `
+    <label class="small">Nome do Cargo</label>
+    <input id="editRoleName" value="${oldName}" placeholder="Nome">
+    <label class="small">Meta Semanal</label>
+    <input id="editRoleWeekly" value="${oldWeekly}" placeholder="Semanal">
+    <label class="small">Meta Mensal</label>
+    <input id="editRoleMonthly" value="${oldMonthly}" placeholder="Mensal">
+  `, async () => {
+    const name = document.getElementById('editRoleName').value;
+    const weekly = parseFloat(document.getElementById('editRoleWeekly').value) || 0;
+    const monthly = parseFloat(document.getElementById('editRoleMonthly').value) || 0;
+    if(!name) return;
+    await fetch(API + '/roles/' + id, { method:'PUT', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, weekly_target: weekly, monthly_target: monthly }) });
+    loadRoles();
+    closeModal();
+  });
+}
+
+function deleteRole(id) {
+  openModal('Apagar Cargo', 'Deseja apagar este cargo?', async () => {
+    await fetch(API + '/roles/' + id, { method:'DELETE', credentials:'include' });
+    loadRoles();
+    closeModal();
+  });
+}
+
+async function loadUsers() {
+  const res = await fetch(API + '/users', { credentials:'include' });
+  if (!res.ok) return;
+  const users = await res.json();
+  const tbody = document.querySelector('#usersTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  users.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${u.name}</td><td>${u.login_id} / ${u.phone||''}</td><td>${u.role}</td>
+      <td>
+        <button onclick="editUser(${u.id}, '${u.name}', '${u.phone||''}', '${u.login_id}', '${u.role}')">Editar</button>
+        <button onclick="deleteUser(${u.id})">Apagar</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function createUser() {
+  const name = document.getElementById('userName').value;
+  const phone = document.getElementById('userPhone').value;
+  const login_id = document.getElementById('userLogin').value;
+  const password = document.getElementById('userPassword').value;
+  const role = document.getElementById('userRole').value;
+  if(!name || !login_id || !password) return alert('Nome, login e senha são obrigatórios');
+  await fetch(API + '/users', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, phone, login_id, password, role }) });
+  document.getElementById('userName').value=''; document.getElementById('userPhone').value=''; document.getElementById('userLogin').value=''; document.getElementById('userPassword').value='';
+  loadUsers();
+}
+
+function editUser(id, oldName, oldPhone, oldLogin, oldRole) {
+  openModal('Editar Usuário', `
+    <label class="small">Nome</label>
+    <input id="editUserName" value="${oldName}">
+    <label class="small">Telefone</label>
+    <input id="editUserPhone" value="${oldPhone}">
+    <label class="small">Login ID</label>
+    <input id="editUserLogin" value="${oldLogin}">
+    <label class="small">Cargo</label>
+    <select id="editUserRole">
+      <option value="user" ${oldRole==='user'?'selected':''}>Usuário Comum</option>
+      <option value="subchefe" ${oldRole==='subchefe'?'selected':''}>Subchefe</option>
+      <option value="chefe" ${oldRole==='chefe'?'selected':''}>Chefe</option>
+      <option value="admin" ${oldRole==='admin'?'selected':''}>Administrador</option>
+    </select>
+    <label class="small">Nova Senha</label>
+    <input id="editUserPassword" type="password" placeholder="(deixe em branco para manter)">
+  `, async () => {
+    const name = document.getElementById('editUserName').value;
+    const phone = document.getElementById('editUserPhone').value;
+    const login_id = document.getElementById('editUserLogin').value;
+    const role = document.getElementById('editUserRole').value;
+    const password = document.getElementById('editUserPassword').value;
+    if(!name || !login_id) return;
+    const payload = { name, phone, login_id, role };
+    if (password) payload.password = password;
+    await fetch(API + '/users/' + id, { method:'PUT', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    loadUsers();
+    closeModal();
+  });
+}
+
+function deleteUser(id) {
+  openModal('Apagar Usuário', 'Deseja apagar este usuário?', async () => {
+    await fetch(API + '/users/' + id, { method:'DELETE', credentials:'include' });
+    loadUsers();
+    closeModal();
+  });
+}
+</script>
+</body>
+</html>
