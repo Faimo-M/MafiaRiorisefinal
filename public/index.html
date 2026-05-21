@@ -326,6 +326,16 @@ function formatMoney(value) {
   return new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
 }
 
+function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let modalConfirmCallback = null;
 
 function openModal(title, htmlBody, onConfirm) {
@@ -407,11 +417,28 @@ async function loadRoles(){
     }
     if(tbody) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.name}</td><td>${formatMoney(r.weekly_target)}</td><td>${formatMoney(r.monthly_target)}</td>
-        <td>
-          <button onclick="editRole(${r.id}, '${r.name}', ${formatMoney(r.weekly_target)}, ${formatMoney(r.monthly_target)})">Editar</button>
-          <button onclick="deleteRole(${r.id})">Apagar</button>
-        </td>`;
+      const nameTd = document.createElement('td'); nameTd.textContent = r.name;
+      const weeklyTd = document.createElement('td'); weeklyTd.textContent = formatMoney(r.weekly_target);
+      const monthlyTd = document.createElement('td'); monthlyTd.textContent = formatMoney(r.monthly_target);
+      const actionsTd = document.createElement('td');
+      if (window.currentUserRole === 'chefe' || window.currentUserRole === 'admin') {
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.textContent = 'Editar';
+        editButton.addEventListener('click', () => editRole(r.id, r.name, r.weekly_target, r.monthly_target));
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.textContent = 'Apagar';
+        deleteButton.addEventListener('click', () => deleteRole(r.id));
+
+        actionsTd.appendChild(editButton);
+        actionsTd.appendChild(deleteButton);
+      }
+      tr.appendChild(nameTd);
+      tr.appendChild(weeklyTd);
+      tr.appendChild(monthlyTd);
+      tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     }
   });
