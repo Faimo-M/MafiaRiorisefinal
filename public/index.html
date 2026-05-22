@@ -404,6 +404,10 @@ async function loadAll(){
 
 async function loadRoles(){
   const res = await fetch(API + '/roles', { credentials:'include' });
+  if (!res.ok) {
+    console.warn('loadRoles failed', res.status);
+    return;
+  }
   const roles = await res.json();
   const sel = document.getElementById('memberRole');
   sel.innerHTML = '<option value="">Sem cargo</option>';
@@ -446,6 +450,10 @@ async function loadRoles(){
 
 async function loadMembers(){
   const res = await fetch(API + '/members', { credentials:'include' });
+  if (!res.ok) {
+    console.warn('loadMembers failed', res.status);
+    return;
+  }
   const members = await res.json();
   const contribSel = document.getElementById('contribMember');
   if(contribSel) contribSel.innerHTML = '<option value="">Selecione um membro</option>';
@@ -516,7 +524,10 @@ async function addContribution(){
 
 async function loadContributions() {
   const res = await fetch(API + '/contributions', { credentials:'include' });
-  if (!res.ok) return;
+  if (!res.ok) {
+    console.warn('loadContributions failed', res.status);
+    return;
+  }
   const contributions = await res.json();
   const tbody = document.querySelector('#contributionsTable tbody');
   if(!tbody) return;
