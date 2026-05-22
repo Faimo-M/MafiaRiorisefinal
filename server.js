@@ -4,26 +4,13 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const MySQLStore = require('express-mysql-session')(session);
 const cors = require('cors');
 const path = require('path');
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'troque-por-uma-chave-secreta',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax'
-  }
-}));
-
-const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-
-// Servir arquivos estáticos (frontend)
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Pool de conexões MySQL
 const pool = mysql.createPool({
@@ -36,6 +23,33 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0
 });
+
+// Session store com MySQL (persistente em produção)
+const sessionStore = new MySQLStore({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT
+});
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'troque-por-uma-chave-secreta',
+  store: sessionStore,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+  }
+}));
+
+const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+// Servir arquivos estáticos (frontend)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Helpers
 async function query(sql, params=[]) {
