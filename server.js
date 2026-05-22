@@ -39,10 +39,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
@@ -154,8 +154,7 @@ app.delete('/api/roles/:id', requireAuth, requireRole(['chefe']), asyncHandler(a
 
 /* Members */
 app.get('/api/members', requireAuth, asyncHandler(async (req, res) => {
-  const rows = await query(`SELECT m.id,m.name,m.total_contribution,m.role_id,r.name as role_name 
-    FROM members m LEFT JOIN roles r ON m.role_id=r.id`);
+  const rows = await query(`SELECT m.id,m.name,m.total_contribution,m.role_id,r.name as role_name FROM members m LEFT JOIN roles r ON m.role_id=r.id`);
   res.json(rows);
 }));
 app.post('/api/members', requireAuth, requireRole(['chefe','subchefe','user']), asyncHandler(async (req, res) => {
